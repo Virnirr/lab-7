@@ -1,16 +1,29 @@
 ---
 title: "Challenge 7: Incorporating Multiple Inputs"
 subtitle: "Functions + Fish"
-author: "Your name here!"
-format: html
-editor: source
-embed-resources: true
+author: "Zhixiang He"
+format: 
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+    toc: true
+    theme: yeti
+execute: 
+  error: true
+  echo: true
+  message: false
+  warning: false
 ---
 
 ```{r}
 #| label: setup
 
+library(tidyverse)
 
+fish <- read_csv(
+  here::here("data", "BlackfootFish.csv")
+)
 ```
 
 ## Condition Index
@@ -43,6 +56,10 @@ If you are struggling with the structure of your function, I would suggest readi
 ```{r}
 #| label: function-to-change-impossible-measurements-to-NA
 
+impossible_to_na <- function(vec, min_val, max_val) {
+  vec[vec < min_val | vec > max_val] <- NA
+  return(vec)
+}
 ```
 
 **3. After consulting the [Montana Record Table](https://fwp.mt.gov/fish/anglingData/records) for the four species of trout included in these data, I have conjectured that it is unlikely to have measurements for fish below 5 cm and above 80 cm in length or below 10 g and above 4,000 g in weight. Use your function to modify the `length` and `weight` columns of the `fish` dataset based on my cutoffs.**
@@ -50,6 +67,11 @@ If you are struggling with the structure of your function, I would suggest readi
 ```{r}
 #| label: modify-impossible-values-of-length-weight
 
+fish <- fish |>
+  mutate(
+    length = impossible_to_na(length, 5, 80),
+    weight = impossible_to_na(weight, 10, 4000)
+  )
 ```
 
 **3. Write a function to calculate the condition index of a fish, given inputs of weight and length.**
@@ -63,6 +85,10 @@ dataset and variable names as inputs)!
 ```{r}
 #| label: condition-function
 
+# function that takes in weght and length and calculates the condition index
+condition_index <- function(weight, length) {
+  (weight / (length ^ 3)) * 100000
+}
 ```
 
 **4. Make a thoughtful visualization of how fish conditions have varied over the duration of this study.**
@@ -76,4 +102,20 @@ dataset and variable names as inputs)!
 ```{r}
 #| label: condition-indices-over-time
 
+fish |>
+  # Calculate the condition index
+  mutate(cond_index = condition_index(weight, length)) |>
+  ggplot(aes(x = factor(year), y = cond_index)) +
+  geom_boxplot(outlier.shape = NA, fill = "lightblue", alpha = 0.5) +  # Boxplots for each year
+  geom_jitter(width = 0.2, alpha = 0.6, color = "darkblue") +         # Jittered points for individual data
+  geom_smooth(aes(group = 1), method = "loess", color = "red", se = TRUE) + # Smooth trend line
+  labs(
+    title = "Variation in Fish Condition Index Over Time",
+    x = "Year",
+    y = "Condition Index"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Tilt x-axis labels for readability
+  )
 ```

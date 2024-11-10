@@ -1,9 +1,18 @@
 ---
 title: "Lab 7: Functions + Fish"
-author: "Your name here!"
-format: html
-editor: source
-embed-resources: true
+author: "Zhixiang He"
+format: 
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+    toc: true
+    theme: yeti
+execute: 
+  error: true
+  echo: true
+  message: false
+  warning: false
 ---
 
 The goal of this lab is learn more about exploring missing data and writing
@@ -12,7 +21,11 @@ modular code.
 ```{r}
 #| label: setup
 
+library("tidyverse")
 
+fish <- read_csv(
+  here::here("data", "BlackfootFish.csv")
+)
 ```
 
 ## The Data
@@ -45,12 +58,78 @@ measurement errors.
 ```{r}
 #| label: find-missing-values
 
+fish |>
+  mutate(
+    across(.cols = trip:species,
+           .fns = ~ as.character(.))
+  ) |>
+  pivot_longer(
+    cols = trip:species,
+    names_to = "variables",
+    values_to = "data"
+  ) |>
+  filter(
+    if_any(.cols = data,
+           .fns = ~ is.na(.))
+  ) |>
+  distinct()
 ```
+From the data exploration, I found that there are a total of `1796` observation wtih missing data. The variable (column) with missing data is only `weight`.
 
 **2. Create ONE thoughtful visualization that explores the frequency of missing values across the different years, sections, and trips.**
 
 ```{r}
 #| label: visual-of-missing-values-over-time
+
+# using scales = "free_x": https://ggplot2.tidyverse.org/reference/facet_grid.html
+# controlling aesthetic evaluation after computed values in geom_bar: https://ggplot2.tidyverse.org/reference/aes_eval.html
+# theme modification: https://ggplot2.tidyverse.org/reference/theme.html
+
+fish |>
+  # Data wrangling to get frequency of missing values by year
+  filter(
+    if_any(
+      .cols = weight,
+      .fns = ~ is.na(.)
+    )
+  ) |>
+  mutate(
+    across(
+      .cols = c("year", "section", "trip"),
+      .fns = ~ as.character(.)
+    )
+  ) |>
+  pivot_longer(
+    cols = c("year", "section", "trip"),
+    names_to = "variables",
+    values_to = "data"
+  ) |>
+  # ggplot to plot a bar chart with smooth of the frequency over the years
+  ggplot(
+    mapping = aes(x = data)
+  ) +
+  geom_bar(aes(fill = after_stat(count)), 
+           show.legend = TRUE) +
+  facet_wrap(~ variables, scales = "free_x") + # Limits vary across facets
+  scale_fill_gradient(
+    low = "lightblue", high = "darkblue",
+    name = "Frequency"  # Label for the legend
+  ) +
+  labs(
+    title = "Frequency of Missing Values in Fish Data by Section, Trip, and Year",
+    x = "Year/Section/Trip",
+    y = "",
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    axis.text.x = element_text(angle = 65, 
+                               hjust = 1),
+    panel.spacing = unit(1, 
+                         "lines"),
+    plot.title = element_text(face = "bold", 
+                              hjust = 0.5),
+    legend.position = "bottom"
+  )
 
 ```
 
@@ -84,6 +163,7 @@ understand the intent of the process. *Additionally, it can make it very difficu
 
 **3. What is the mistake I made in the above rescaling code?**
 
+The mistake that you made in the above rescaling code is breaking the `DRY (Don't Repeat Yourself) rule`. Duplicating the code can make it messy and unreadable as it grows larger and larger. 
 
 When you find yourself copy-pasting lines of code, it's time to write a
 function, instead!
@@ -95,6 +175,11 @@ function, instead!
 
 ```{r}
 #| label: write-rescale-function
+
+rescale_01 <- function(vec) {
+  stopifnot(is.numeric(vec), length(vec) > 1)
+  (vec - min(vec, na.rm = TRUE)) / (max(vec, na.rm = TRUE) - min(vec, na.rm = TRUE))
+}
 
 ```
 
@@ -143,6 +228,7 @@ statement in order to create a `length_scaled` variable.
 
 ```{r}
 #| label: compare-original-with-rescaled-lengths
+#| layout-ncol: 2
 
 fish |>  
   ggplot(aes(x = length)) + 
@@ -151,7 +237,12 @@ fish |>
   scale_y_continuous(limits = c(0,4000))
 
 # Code for Q7 plot.
-
+fish |> 
+  mutate(length_scaled = rescale_01(length)) |>
+  ggplot(aes(x = length_scaled)) + 
+  geom_histogram(binwidth = 0.05) +
+  labs(x = "New value of fish length_scaled (mm)") +
+  scale_y_continuous(limits = c(0,4000))
 ```
 
 ::: callout-tip
@@ -184,6 +275,20 @@ section of R for Data Science!
 ```{r}
 #| label: rescale-data-frame-function
 
+
+# Getting all the variables in a tibble: https://tidyselect.r-lib.org/reference/all_of.html
+
+# rlang with multiple arguments as vector (rlang::ensym(x)): https://psych252.github.io/psych252book/figures/tidyeval.pdf
+
+rescale_column <- function(df, ...) {
+  vars <- ensyms(...)  # Capture column names as symbols
+  vars <- as.character(vars)
+  df |>
+    mutate(
+      across(all_of(vars), 
+             ~ rescale_01(.))
+      )
+}
 ```
 
 **9. Use your `rescale_column()` function to rescale *both* the `length` and `weight` columns.**
@@ -194,5 +299,5 @@ I expect that you carry out this process by calling the `rescale_column()` funct
 
 ```{r}
 #| label: rescale-two-columns
-
+rescale_column(fish, length, weight)
 ```
